@@ -13,6 +13,7 @@ from datetime import date
 import io
 
 from .models import PeriodePaie, BulletinPaie, Constante
+from .utils_declarations import analyser_bases_vf_onfpp
 from employes.models import Employe
 from core.decorators import entreprise_active_required
 
@@ -103,17 +104,13 @@ def get_declarations_data(entreprise, annee, mois=None):
     total_dgi = total_rts + total_vf
     total_onfpp_ta = total_onfpp + total_ta
     total_dmu = total_dgi + total_onfpp_ta
-    deduction_vf_onfpp = max(Decimal('0'), masse_salariale - total_base_vf)
-    taux_optimisation_global = (
-        (deduction_vf_onfpp * Decimal('100') / masse_salariale).quantize(Decimal('0.01'))
-        if masse_salariale else Decimal('0.00')
+    analyse_bases = analyser_bases_vf_onfpp(
+        masse_salariale,
+        total_base_vf,
+        total_base_onfpp,
     )
-    mode_fiscal = 'optimise' if total_base_vf and total_base_vf < masse_salariale else 'strict'
-    mode_fiscal_label = (
-        'Optimisé - base VF/ONFPP réduite des indemnités exonérées'
-        if mode_fiscal == 'optimise'
-        else 'Strict fiscal - VF/ONFPP sur salaire brut'
-    )
+    total_base_vf = analyse_bases['base_vf']
+    total_base_onfpp = analyse_bases['base_onfpp']
     
     # Détail par employé
     detail_employes = []
@@ -169,9 +166,12 @@ def get_declarations_data(entreprise, annee, mois=None):
         'total_dgi': total_dgi,
         'total_onfpp_ta': total_onfpp_ta,
         'total_dmu': total_dmu,
-        'mode_fiscal': mode_fiscal,
-        'mode_fiscal_label': mode_fiscal_label,
-        'taux_optimisation_global': taux_optimisation_global,
+        'mode_fiscal': analyse_bases['mode_fiscal'],
+        'mode_fiscal_label': analyse_bases['mode_fiscal_label'],
+        'bases_vf_onfpp_distinctes': analyse_bases['bases_vf_onfpp_distinctes'],
+        'taux_optimisation_global': analyse_bases['taux_optimisation_global'],
+        'taux_optimisation_vf': analyse_bases['taux_optimisation_vf'],
+        'taux_optimisation_onfpp': analyse_bases['taux_optimisation_onfpp'],
         'detail_employes': detail_employes,
         'date_generation': timezone.now(),
     }
@@ -513,7 +513,8 @@ def export_dmu_excel(request):
         ("Mode fiscal appliqué", data['mode_fiscal_label']),
         ("Base VF", float(data['total_base_vf'])),
         ("Base ONFPP", float(data['total_base_onfpp'])),
-        ("Taux optimisation base", f"{data['taux_optimisation_global']}%"),
+        ("Optimisation base VF", f"{data['taux_optimisation_vf']}%"),
+        ("Optimisation base ONFPP", f"{data['taux_optimisation_onfpp']}%"),
     ]
     for label, value in fiscal_rows:
         ws.cell(row=row, column=1, value=label).border = border
@@ -677,7 +678,8 @@ def export_dmu_pdf(request):
         ["Mode fiscal appliqué", data['mode_fiscal_label']],
         ["Base VF", f"{data['total_base_vf']:,.0f} GNF"],
         ["Base ONFPP", f"{data['total_base_onfpp']:,.0f} GNF"],
-        ["Taux optimisation base", f"{data['taux_optimisation_global']}%"],
+        ["Optimisation base VF", f"{data['taux_optimisation_vf']}%"],
+        ["Optimisation base ONFPP", f"{data['taux_optimisation_onfpp']}%"],
     ]
     fiscal_table = Table(fiscal_data, colWidths=[5*cm, 9*cm])
     fiscal_table.setStyle(TableStyle([

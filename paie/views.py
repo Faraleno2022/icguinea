@@ -52,6 +52,7 @@ from .models import (
 from employes.models import Employe
 from .services import MoteurCalculPaie
 from .utils import format_anciennete_bulletin
+from .utils_declarations import analyser_bases_vf_onfpp
 from core.decorators import reauth_required, entreprise_active_required
 
 
@@ -2093,6 +2094,26 @@ def _filtres_periode_livre_paie(request):
     return annee, mois
 
 
+def _libelle_portee_livre_paie(annee, mois):
+    if annee and mois:
+        return {
+            'badge': 'Mensuel',
+            'titre': f'Rapport mensuel - {mois:02d}/{annee}',
+            'description': 'Les totaux affichés concernent uniquement le mois sélectionné.',
+        }
+    if annee:
+        return {
+            'badge': 'Annuel',
+            'titre': f'Cumul annuel - {annee}',
+            'description': 'Les totaux affichés cumulent tous les mois disponibles de l’année.',
+        }
+    return {
+        'badge': 'Toutes périodes',
+        'titre': 'Cumul toutes périodes',
+        'description': 'Les totaux affichés cumulent toutes les périodes de paie disponibles.',
+    }
+
+
 def _normaliser_texte_livre(valeur):
     texte = str(valeur or '').strip().lower()
     return ''.join(
@@ -2219,6 +2240,7 @@ def livre_paie(request):
         pdf_params.append(f'annee={annee}')
     if mois:
         pdf_params.append(f'mois={mois}')
+    portee_livre = _libelle_portee_livre_paie(annee, mois)
 
     return render(request, 'paie/livre_paie.html', {
         'bulletins': bulletins,
@@ -2227,6 +2249,7 @@ def livre_paie(request):
         'mois': mois,
         'annees': annees,
         'controles_livre': controles_livre,
+        'portee_livre': portee_livre,
         'livre_pdf_query': f"?{'&'.join(pdf_params)}" if pdf_params else '',
     })
 
@@ -2395,15 +2418,13 @@ def telecharger_livre_paie_pdf(request):
 
     story = []
 
-    titre = "Livre de Paie - Toutes les périodes"
-    if annee:
-        titre = f"Livre de Paie - Année {int(annee)}"
-    if mois:
-        titre += f" - Mois {int(mois)}"
+    portee_livre = _libelle_portee_livre_paie(annee, mois)
+    titre = f"Livre de Paie - {portee_livre['titre']}"
     story.append(Paragraph(titre, styles['LivreTitre']))
 
     statut_table = Table([
         ['STATUT', controles_livre['statut']],
+        ['Portée', f"{portee_livre['badge']} - {portee_livre['description']}"],
         ['Controle', 'Net = brut - retenues affichees | CNSS plafonnee OK'],
     ], colWidths=[2.5 * cm, 10.5 * cm])
     statut_table.setStyle(TableStyle([
@@ -2670,20 +2691,10 @@ def declarations_sociales(request):
     total_dgi = declaration_irg['total_irg'] + declaration_charges['vf']
     total_onfpp_ta = declaration_charges['onfpp'] + declaration_charges['ta']
     total_dmu = total_dgi + total_onfpp_ta
-    deduction_vf_onfpp = max(Decimal('0'), salaire_brut_total - total_base_vf)
-    taux_optimisation_global = (
-        (deduction_vf_onfpp * Decimal('100') / salaire_brut_total).quantize(Decimal('0.01'))
-        if salaire_brut_total else Decimal('0.00')
-    )
-    mode_fiscal_code = (
-        'optimise'
-        if total_base_vf and total_base_vf < salaire_brut_total
-        else 'strict'
-    )
-    mode_fiscal_label = (
-        'Optimisé - base VF/ONFPP réduite des indemnités exonérées'
-        if mode_fiscal_code == 'optimise'
-        else 'Strict fiscal - VF/ONFPP sur salaire brut'
+    analyse_bases = analyser_bases_vf_onfpp(
+        salaire_brut_total,
+        total_base_vf,
+        total_base_onfpp,
     )
 
     total_general = declaration_cnss['total_cotisation'] + total_dmu
@@ -2714,12 +2725,17 @@ def declarations_sociales(request):
         'total_dmu': total_dmu,
         'total_onfpp_ta': total_onfpp_ta,
         'total_general': total_general,
-        'mode_fiscal_code': mode_fiscal_code,
-        'mode_fiscal_label': mode_fiscal_label,
-        'taux_optimisation_global': taux_optimisation_global,
+        'mode_fiscal_code': analyse_bases['mode_fiscal'],
+        'mode_fiscal_label': analyse_bases['mode_fiscal_label'],
+        'bases_vf_onfpp_distinctes': analyse_bases['bases_vf_onfpp_distinctes'],
+        'taux_optimisation_global': analyse_bases['taux_optimisation_global'],
+        'taux_optimisation_vf': analyse_bases['taux_optimisation_vf'],
+        'taux_optimisation_onfpp': analyse_bases['taux_optimisation_onfpp'],
         'detail_employes': detail_employes,
         'annee': int(annee),
         'mois': int(mois) if mois else None,
+        'portee_declaration': 'Mensuelle' if mois else 'Annuelle',
+        'portee_detail': f"{int(mois):02d}/{int(annee)}" if mois else f"Année complète {int(annee)}",
         'annees': annees,
         'periodes': periodes
     })
@@ -2767,13 +2783,16 @@ def declarations_sociales_pdf(request):
         total_cnss_employeur=Sum('cnss_employeur'),
         total_rts=Sum('irg'),
         total_vf=Sum('versement_forfaitaire'),
+        total_ta=Sum('taxe_apprentissage'),
         total_onfpp=Sum('contribution_onfpp'),
     )
     salaire_brut_total = totaux['total_brut'] or Decimal('0')
     total_base_vf = totaux['total_base_vf'] or Decimal('0')
     total_base_onfpp = totaux['total_base_onfpp'] or total_base_vf
     total_onfpp = totaux['total_onfpp'] or Decimal('0')
+    total_ta = totaux['total_ta'] or Decimal('0')
     if total_salaries >= 30 and not total_onfpp:
+        total_ta = Decimal('0')
         total_onfpp = (total_base_onfpp * Decimal('0.015')).quantize(Decimal('1'))
 
     declaration_cnss = {
@@ -2792,19 +2811,15 @@ def declarations_sociales_pdf(request):
         'base_vf': total_base_vf,
         'base_onfpp': total_base_onfpp,
         'vf': totaux['total_vf'] or Decimal('0'),
+        'ta': total_ta,
         'onfpp': total_onfpp,
     }
     total_dgi = declaration_irg['total_irg'] + declaration_charges['vf']
-    total_dmu = total_dgi + declaration_charges['onfpp']
-    deduction_vf_onfpp = max(Decimal('0'), salaire_brut_total - total_base_vf)
-    taux_optimisation_global = (
-        (deduction_vf_onfpp * Decimal('100') / salaire_brut_total).quantize(Decimal('0.01'))
-        if salaire_brut_total else Decimal('0.00')
-    )
-    mode_fiscal_label = (
-        'Optimisé - base VF/ONFPP réduite des indemnités exonérées'
-        if total_base_vf and total_base_vf < salaire_brut_total
-        else 'Strict fiscal - VF/ONFPP sur salaire brut'
+    total_dmu = total_dgi + declaration_charges['onfpp'] + declaration_charges['ta']
+    analyse_bases = analyser_bases_vf_onfpp(
+        salaire_brut_total,
+        total_base_vf,
+        total_base_onfpp,
     )
     total_general = declaration_cnss['total_cotisation'] + total_dmu
     
@@ -2865,10 +2880,11 @@ def declarations_sociales_pdf(request):
     elements.append(Paragraph("Mode fiscal et base VF/ONFPP", styles['Heading2']))
     mode_data = [
         ['Libellé', 'Valeur'],
-        ['Mode fiscal appliqué', mode_fiscal_label],
+        ['Mode fiscal appliqué', analyse_bases['mode_fiscal_label']],
         ['Base VF', f"{declaration_charges['base_vf']:,.0f}"],
         ['Base ONFPP', f"{declaration_charges['base_onfpp']:,.0f}"],
-        ['Taux optimisation base', f"{taux_optimisation_global}%"],
+        ['Optimisation base VF', f"{analyse_bases['taux_optimisation_vf']}%"],
+        ['Optimisation base ONFPP', f"{analyse_bases['taux_optimisation_onfpp']}%"],
     ]
     mode_table = Table(mode_data, colWidths=[7*cm, 9*cm])
     mode_table.setStyle(TableStyle([
@@ -2889,7 +2905,8 @@ def declarations_sociales_pdf(request):
         ['  RTS (Trésor Public)', f"{declaration_irg['total_irg']:,.0f}"],
         ['  VF', f"{declaration_charges['vf']:,.0f}"],
         ['Total ONFPP', f"{declaration_charges['onfpp']:,.0f}"],
-        ['TOTAL DMU (RTS + VF + ONFPP)', f"{total_dmu:,.0f}"],
+        ['Total TA', f"{declaration_charges['ta']:,.0f}"],
+        ['TOTAL DMU (RTS + VF + ONFPP/TA)', f"{total_dmu:,.0f}"],
         ['TOTAL GÉNÉRAL (CNSS + DMU)', f"{total_general:,.0f}"],
     ]
     recap_table = Table(recap_data, colWidths=[10*cm, 6*cm])

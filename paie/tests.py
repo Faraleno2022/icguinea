@@ -357,6 +357,19 @@ class EtaxModeTaOnfppTests(TestCase):
         self.assertEqual(data['detail_employes'][0]['ta'], Decimal('0'))
         self.assertEqual(data['total_onfpp'], Decimal('382500'))
 
+    def test_etax_onfpp_utilise_base_onfpp_dediee(self):
+        BulletinPaie.objects.filter(periode=self.periode).update(
+            base_onfpp=Decimal('650000'),
+            contribution_onfpp=Decimal('0'),
+        )
+
+        data = get_etax_data(self.entreprise, 2026, 5)
+
+        self.assertEqual(data['total_base_vf'], Decimal('25500000'))
+        self.assertEqual(data['total_base_onfpp'], Decimal('19500000'))
+        self.assertEqual(data['total_onfpp'], Decimal('292500'))
+        self.assertEqual(data['detail_employes'][0]['onfpp'], Decimal('9750'))
+
     def test_dmu_expose_total_dgi_onfpp_et_base_vf(self):
         data = get_declarations_data(self.entreprise, 2026, 5)
 
@@ -366,6 +379,23 @@ class EtaxModeTaOnfppTests(TestCase):
         self.assertEqual(data['total_dmu'], Decimal('1912500'))
         self.assertEqual(data['mode_fiscal'], 'optimise')
         self.assertEqual(data['taux_optimisation_global'], Decimal('15.00'))
+        self.assertEqual(data['taux_optimisation_vf'], Decimal('15.00'))
+        self.assertEqual(data['taux_optimisation_onfpp'], Decimal('15.00'))
+
+    def test_dmu_expose_optimisations_vf_et_onfpp_separees(self):
+        BulletinPaie.objects.filter(periode=self.periode).update(
+            base_onfpp=Decimal('650000'),
+            contribution_onfpp=Decimal('0'),
+        )
+
+        data = get_declarations_data(self.entreprise, 2026, 5)
+
+        self.assertEqual(data['total_base_vf'], Decimal('25500000'))
+        self.assertEqual(data['total_base_onfpp'], Decimal('19500000'))
+        self.assertEqual(data['mode_fiscal'], 'bases_distinctes')
+        self.assertEqual(data['taux_optimisation_vf'], Decimal('15.00'))
+        self.assertEqual(data['taux_optimisation_onfpp'], Decimal('35.00'))
+        self.assertTrue(data['bases_vf_onfpp_distinctes'])
 
 class CNSSCalculTests(SimpleTestCase):
     """TU-01 à TU-03: Tests CNSS salarié et employeur"""

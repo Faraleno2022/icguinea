@@ -84,6 +84,14 @@ def _get_bulletins_filtrés(entreprise, annee, periode_type, mois=None, trimestr
     return qs
 
 
+def _libelle_portee_rapport(annee, periode_type, mois=None, trimestre=None):
+    if periode_type == 'mois' and mois:
+        return f"Rapport mensuel - {MOIS_FR[int(mois)]} {annee}"
+    if periode_type == 'trimestre' and trimestre:
+        return f"Rapport trimestriel - T{int(trimestre)} {annee}"
+    return f"Rapport annuel - {annee}"
+
+
 def _calcul_rapport(bulletins_qs):
     """Calcule les agrégats principaux à partir d'un queryset de bulletins."""
     agg = bulletins_qs.aggregate(
@@ -406,6 +414,7 @@ def rapport_masse_salariale(request):
 
     context = {
         'annee': annee,
+        'portee_rapport': _libelle_portee_rapport(annee, periode_type, mois, trimestre),
         'annee_n1': annee - 1,
         'periode_type': periode_type,
         'mois': mois,
@@ -480,7 +489,7 @@ def rapport_masse_salariale_excel(request):
 
     # Titre
     ws.merge_cells('A1:G1')
-    ws['A1'] = f"RAPPORT MASSE SALARIALE - {annee}"
+    ws['A1'] = _libelle_portee_rapport(annee, periode_type, mois, trimestre).upper()
     ws['A1'].font = Font(bold=True, size=14)
     ws['A1'].alignment = center
 
@@ -627,7 +636,7 @@ def rapport_masse_salariale_pdf(request):
                                     fontSize=12, fontName='Helvetica-Bold',
                                     spaceAfter=6, spaceBefore=12)
 
-    elements.append(Paragraph(f"RAPPORT MASSE SALARIALE - {annee}", title_style))
+    elements.append(Paragraph(_libelle_portee_rapport(annee, periode_type, mois, trimestre).upper(), title_style))
     elements.append(Paragraph(f"Généré le {date.today().strftime('%d/%m/%Y')}", sub_style))
 
     # Indicateurs globaux

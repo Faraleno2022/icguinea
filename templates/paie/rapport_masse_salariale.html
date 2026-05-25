@@ -12,7 +12,10 @@
         <div class="col-12 d-flex justify-content-between align-items-center">
             <div>
                 <h2><i class="fas fa-chart-bar me-2 text-primary"></i>Rapport Masse Salariale</h2>
-                <p class="text-muted mb-0">Analyse des coûts salariaux et répartition par service</p>
+                <p class="text-muted mb-0">
+                    Analyse des coûts salariaux et répartition par service.
+                    <span class="badge bg-primary">{{ portee_rapport }}</span>
+                </p>
             </div>
             <div class="d-flex gap-2">
                 <a href="{% url 'paie:rapport_masse_salariale_excel' %}?{{ request.GET.urlencode }}"

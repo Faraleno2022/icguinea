@@ -76,6 +76,7 @@ def get_etax_data(entreprise, annee, mois):
         total_rts=Sum('irg'),
         total_vf=Sum('versement_forfaitaire'),
         total_base_vf=Sum('base_vf'),
+        total_base_onfpp=Sum('base_onfpp'),
         total_ta=Sum('taxe_apprentissage'),
         total_onfpp=Sum('contribution_onfpp'),
         total_cnss_employe=Sum('cnss_employe'),
@@ -83,11 +84,12 @@ def get_etax_data(entreprise, annee, mois):
     )
 
     data = {key: _to_decimal(value) for key, value in totaux.items()}
+    data['total_base_onfpp'] = data['total_base_onfpp'] or data['total_base_vf']
     data['effectif'] = bulletins.values('employe').distinct().count()
     mode_onfpp = data['effectif'] >= 30
     if mode_onfpp:
         data['total_ta'] = Decimal('0')
-        data['total_onfpp'] = (data['total_base_vf'] * Decimal('0.015')).quantize(Decimal('1'))
+        data['total_onfpp'] = (data['total_base_onfpp'] * Decimal('0.015')).quantize(Decimal('1'))
     data['total_fiscal'] = data['total_rts'] + data['total_vf']
     data['total_cnss'] = data['total_cnss_employe'] + data['total_cnss_employeur']
     data['total_general'] = data['total_fiscal']
@@ -96,7 +98,7 @@ def get_etax_data(entreprise, annee, mois):
     data['portee_label'] = "Mensuelle"
     data['mode_ta_onfpp'] = "ONFPP" if mode_onfpp else "TA"
     data['mode_ta_onfpp_note'] = (
-        "Effectif >= 30: TA neutralisee, ONFPP appliquee sur la base VF."
+        "Effectif >= 30: TA neutralisee, ONFPP appliquee sur la base ONFPP."
         if mode_onfpp
         else "Effectif < 30: TA appliquee, ONFPP neutralisee."
     )
@@ -116,7 +118,13 @@ def get_etax_data(entreprise, annee, mois):
             'vf': getattr(bulletin, 'versement_forfaitaire', Decimal('0')) or Decimal('0'),
             'ta': Decimal('0') if mode_onfpp else (getattr(bulletin, 'taxe_apprentissage', Decimal('0')) or Decimal('0')),
             'onfpp': (
-                ((getattr(bulletin, 'base_vf', Decimal('0')) or Decimal('0')) * Decimal('0.015')).quantize(Decimal('1'))
+                (
+                    (
+                        getattr(bulletin, 'base_onfpp', Decimal('0'))
+                        or getattr(bulletin, 'base_vf', Decimal('0'))
+                        or Decimal('0')
+                    ) * Decimal('0.015')
+                ).quantize(Decimal('1'))
                 if mode_onfpp
                 else (getattr(bulletin, 'contribution_onfpp', Decimal('0')) or Decimal('0'))
             ),
@@ -277,6 +285,8 @@ def declaration_etax_excel(request):
     recap = [
         ("Salaire brut", data['total_brut']),
         ("Base imposable RTS", data['total_base_rts']),
+        ("Base VF", data['total_base_vf']),
+        ("Base ONFPP", data['total_base_onfpp']),
         ("RTS", data['total_rts']),
         ("VF", data['total_vf']),
         ("Total eTax (RTS + VF)", data['total_fiscal']),
@@ -347,6 +357,8 @@ def declaration_etax_pdf(request):
         ["Indicateur", "Montant"],
         ["Salaire brut", f"{data['total_brut']:,.0f} GNF"],
         ["Base imposable RTS", f"{data['total_base_rts']:,.0f} GNF"],
+        ["Base VF", f"{data['total_base_vf']:,.0f} GNF"],
+        ["Base ONFPP", f"{data['total_base_onfpp']:,.0f} GNF"],
         ["RTS", f"{data['total_rts']:,.0f} GNF"],
         ["VF", f"{data['total_vf']:,.0f} GNF"],
         ["Total eTax (RTS + VF)", f"{data['total_fiscal']:,.0f} GNF"],

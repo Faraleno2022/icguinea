@@ -61,6 +61,18 @@
         </div>
     </div>
 
+    <div class="alert alert-info border d-flex align-items-start gap-2 mb-4">
+        <i class="fas fa-info-circle mt-1"></i>
+        <div>
+            <strong>Portée {{ portee_declaration|lower }} :</strong> {{ portee_detail }}.
+            {% if mois %}
+            Les exports DMU/eTax/CNSS portent uniquement sur ce mois.
+            {% else %}
+            Les totaux affichés sont des cumuls annuels, pas une déclaration mensuelle DMU.
+            {% endif %}
+        </div>
+    </div>
+
     <!-- Boutons d'export — section séparée, toujours visible -->
     <div class="row mb-4 no-print">
         <div class="col-12">
@@ -243,25 +255,36 @@
                 </div>
                 <div class="card-body">
                     <div class="row text-center mb-3">
-                        <div class="col-md-4 mb-2">
+                        <div class="col-md-3 mb-2">
                             <div class="p-3 bg-light rounded montant-card">
                                 <h6 class="text-muted">Mode fiscal appliqué</h6>
                                 <h5 class="mb-0">{{ mode_fiscal_label }}</h5>
                             </div>
                         </div>
-                        <div class="col-md-4 mb-2">
+                        <div class="col-md-3 mb-2">
                             <div class="p-3 bg-light rounded montant-card">
-                                <h6 class="text-muted">Base VF / ONFPP</h6>
+                                <h6 class="text-muted">Bases VF / ONFPP</h6>
                                 <h5 class="mb-0">{{ declaration_charges.base_vf|floatformat:0|intcomma }} / {{ declaration_charges.base_onfpp|floatformat:0|intcomma }} GNF</h5>
                             </div>
                         </div>
-                        <div class="col-md-4 mb-2">
+                        <div class="col-md-3 mb-2">
                             <div class="p-3 bg-light rounded montant-card">
-                                <h6 class="text-muted">Optimisation base</h6>
-                                <h5 class="mb-0">{{ taux_optimisation_global }}%</h5>
+                                <h6 class="text-muted">Optimisation base VF</h6>
+                                <h5 class="mb-0">{{ taux_optimisation_vf }}%</h5>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <div class="p-3 bg-light rounded montant-card">
+                                <h6 class="text-muted">Optimisation base ONFPP</h6>
+                                <h5 class="mb-0">{{ taux_optimisation_onfpp }}%</h5>
                             </div>
                         </div>
                     </div>
+                    {% if bases_vf_onfpp_distinctes %}
+                    <div class="alert alert-warning py-2 mb-3">
+                        VF et ONFPP n'utilisent pas la même assiette. Les bases et les taux d'optimisation sont donc affichés séparément.
+                    </div>
+                    {% endif %}
                     <table class="table table-bordered">
                         <thead class="table-orange-light">
                             <tr>
