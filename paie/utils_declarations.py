@@ -21,6 +21,32 @@ def taux_optimisation_base(masse_salariale, base):
     return (deduction * Decimal('100') / masse_salariale).quantize(Decimal('0.01'))
 
 
+def base_onfpp_effective(bulletin, taux_onfpp=Decimal('1.5')):
+    """Retourne l'assiette ONFPP exploitable, y compris pour les anciens bulletins."""
+    base_onfpp = decimal_or_zero(getattr(bulletin, 'base_onfpp', None))
+    if base_onfpp > 0:
+        return base_onfpp
+
+    base_vf = decimal_or_zero(getattr(bulletin, 'base_vf', None))
+    if base_vf > 0:
+        return base_vf
+
+    contribution_onfpp = decimal_or_zero(getattr(bulletin, 'contribution_onfpp', None))
+    taux_onfpp = decimal_or_zero(taux_onfpp)
+    if contribution_onfpp > 0 and taux_onfpp > 0:
+        return (contribution_onfpp * Decimal('100') / taux_onfpp).quantize(Decimal('1'))
+
+    return Decimal('0')
+
+
+def somme_base_onfpp_effective(bulletins, taux_onfpp=Decimal('1.5')):
+    """Additionne l'assiette ONFPP effective bulletin par bulletin."""
+    return sum(
+        (base_onfpp_effective(bulletin, taux_onfpp) for bulletin in bulletins),
+        Decimal('0'),
+    )
+
+
 def analyser_bases_vf_onfpp(masse_salariale, base_vf, base_onfpp):
     """Analyse les assiettes VF et ONFPP sans les confondre."""
     masse_salariale = decimal_or_zero(masse_salariale)

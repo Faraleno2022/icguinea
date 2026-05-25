@@ -13,7 +13,11 @@ from datetime import date
 import io
 
 from .models import PeriodePaie, BulletinPaie, Constante
-from .utils_declarations import analyser_bases_vf_onfpp
+from .utils_declarations import (
+    analyser_bases_vf_onfpp,
+    base_onfpp_effective,
+    somme_base_onfpp_effective,
+)
 from employes.models import Employe
 from core.decorators import entreprise_active_required
 
@@ -89,7 +93,7 @@ def get_declarations_data(entreprise, annee, mois=None):
     
     masse_salariale = totaux['masse_salariale'] or Decimal('0')
     total_base_vf = totaux['total_base_vf'] or Decimal('0')
-    total_base_onfpp = totaux['total_base_onfpp'] or total_base_vf
+    total_base_onfpp = somme_base_onfpp_effective(bulletins, taux_onfpp) or total_base_vf
     total_cnss_employe = totaux['total_cnss_employe'] or Decimal('0')
     total_cnss_employeur = totaux['total_cnss_employeur'] or Decimal('0')
     total_rts = totaux['total_rts'] or Decimal('0')
@@ -134,7 +138,7 @@ def get_declarations_data(entreprise, annee, mois=None):
             'rts': bulletin.irg,
             'net_a_payer': bulletin.net_a_payer,
             'base_vf': bulletin.base_vf,
-            'base_onfpp': bulletin.base_onfpp or bulletin.base_vf,
+            'base_onfpp': base_onfpp_effective(bulletin, taux_onfpp),
             'vf': bulletin.versement_forfaitaire,
             'ta': bulletin.taxe_apprentissage,
             'onfpp': onfpp,

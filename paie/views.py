@@ -52,7 +52,7 @@ from .models import (
 from employes.models import Employe
 from .services import MoteurCalculPaie
 from .utils import format_anciennete_bulletin
-from .utils_declarations import analyser_bases_vf_onfpp
+from .utils_declarations import analyser_bases_vf_onfpp, somme_base_onfpp_effective
 from core.decorators import reauth_required, entreprise_active_required
 
 
@@ -2649,7 +2649,7 @@ def declarations_sociales(request):
     )
     salaire_brut_total = totaux['total_brut'] or Decimal('0')
     total_base_vf = totaux['total_base_vf'] or Decimal('0')
-    total_base_onfpp = totaux['total_base_onfpp'] or total_base_vf
+    total_base_onfpp = somme_base_onfpp_effective(bulletins) or total_base_vf
     total_onfpp = totaux['total_onfpp'] or Decimal('0')
     total_ta = totaux['total_ta'] or Decimal('0')
     if total_salaries >= 30 and not total_onfpp:
@@ -2788,7 +2788,7 @@ def declarations_sociales_pdf(request):
     )
     salaire_brut_total = totaux['total_brut'] or Decimal('0')
     total_base_vf = totaux['total_base_vf'] or Decimal('0')
-    total_base_onfpp = totaux['total_base_onfpp'] or total_base_vf
+    total_base_onfpp = somme_base_onfpp_effective(bulletins) or total_base_vf
     total_onfpp = totaux['total_onfpp'] or Decimal('0')
     total_ta = totaux['total_ta'] or Decimal('0')
     if total_salaries >= 30 and not total_onfpp:

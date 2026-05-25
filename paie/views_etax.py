@@ -16,6 +16,7 @@ from django.views.decorators.http import require_POST
 
 from core.decorators import entreprise_active_required, reauth_required
 from .models import BulletinPaie, DeclarationEtax, PeriodePaie
+from .utils_declarations import base_onfpp_effective, somme_base_onfpp_effective
 
 try:
     import openpyxl
@@ -84,7 +85,7 @@ def get_etax_data(entreprise, annee, mois):
     )
 
     data = {key: _to_decimal(value) for key, value in totaux.items()}
-    data['total_base_onfpp'] = data['total_base_onfpp'] or data['total_base_vf']
+    data['total_base_onfpp'] = somme_base_onfpp_effective(bulletins) or data['total_base_vf']
     data['effectif'] = bulletins.values('employe').distinct().count()
     mode_onfpp = data['effectif'] >= 30
     if mode_onfpp:
@@ -118,13 +119,7 @@ def get_etax_data(entreprise, annee, mois):
             'vf': getattr(bulletin, 'versement_forfaitaire', Decimal('0')) or Decimal('0'),
             'ta': Decimal('0') if mode_onfpp else (getattr(bulletin, 'taxe_apprentissage', Decimal('0')) or Decimal('0')),
             'onfpp': (
-                (
-                    (
-                        getattr(bulletin, 'base_onfpp', Decimal('0'))
-                        or getattr(bulletin, 'base_vf', Decimal('0'))
-                        or Decimal('0')
-                    ) * Decimal('0.015')
-                ).quantize(Decimal('1'))
+                (base_onfpp_effective(bulletin) * Decimal('0.015')).quantize(Decimal('1'))
                 if mode_onfpp
                 else (getattr(bulletin, 'contribution_onfpp', Decimal('0')) or Decimal('0'))
             ),

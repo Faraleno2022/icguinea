@@ -397,6 +397,48 @@ class EtaxModeTaOnfppTests(TestCase):
         self.assertEqual(data['taux_optimisation_onfpp'], Decimal('35.00'))
         self.assertTrue(data['bases_vf_onfpp_distinctes'])
 
+    def test_declaration_annuelle_additionne_base_onfpp_effective_historique(self):
+        BulletinPaie.objects.filter(periode=self.periode).update(
+            base_onfpp=Decimal('650000'),
+            contribution_onfpp=Decimal('9750'),
+            taxe_apprentissage=Decimal('0'),
+        )
+        periode_avril = PeriodePaie.objects.create(
+            entreprise=self.entreprise,
+            annee=2026,
+            mois=4,
+            libelle='Avril 2026',
+            date_debut=date(2026, 4, 1),
+            date_fin=date(2026, 4, 30),
+            statut_periode='validee',
+        )
+        for employe in Employe.objects.filter(entreprise=self.entreprise):
+            BulletinPaie.objects.create(
+                employe=employe,
+                periode=periode_avril,
+                numero_bulletin=f'BUL-ETAX-AVR-{employe.id}',
+                mois_paie=4,
+                annee_paie=2026,
+                salaire_brut=Decimal('1000000'),
+                base_rts=Decimal('800000'),
+                cnss_employe=Decimal('50000'),
+                cnss_employeur=Decimal('180000'),
+                irg=Decimal('0'),
+                net_a_payer=Decimal('950000'),
+                versement_forfaitaire=Decimal('51000'),
+                base_vf=Decimal('850000'),
+                base_onfpp=Decimal('0'),
+                taxe_apprentissage=Decimal('0'),
+                contribution_onfpp=Decimal('12750'),
+                statut_bulletin='valide',
+            )
+
+        data = get_declarations_data(self.entreprise, 2026)
+
+        self.assertEqual(data['total_base_vf'], Decimal('51000000'))
+        self.assertEqual(data['total_base_onfpp'], Decimal('45000000'))
+        self.assertEqual(data['total_onfpp'], Decimal('675000'))
+
 class CNSSCalculTests(SimpleTestCase):
     """TU-01 à TU-03: Tests CNSS salarié et employeur"""
     
