@@ -18,11 +18,27 @@ from paie.models import BulletinPaie, ElementSalaire, PeriodePaie, RubriquePaie
 from paie.services import MoteurCalculPaie, appliquer_constantes_cnss_legales
 from paie.services_retropaie import calculer_charges_patronales
 from paie.services_simulation import calculer_un_bareme as calculer_un_bareme_simulation
-from paie.views import _controles_livre_paie
+from paie.views import _controles_livre_paie, _libelle_portee_livre_paie
 from paie.views_rapports import _audit_masse_salariale, _charges_patronales_bulletin
 from paie.views_etax import get_etax_data
 from paie.views_export import get_declarations_data
 from temps_travail.models import HeureSupplementaire
+
+
+class LibellePorteeLivrePaieTests(SimpleTestCase):
+    """Controle les libelles de portee du livre de paie."""
+
+    def test_une_annee_disponible_sans_filtre_affiche_annuel(self):
+        portee = _libelle_portee_livre_paie(None, None, [2026])
+
+        self.assertEqual(portee['badge'], 'Annuel')
+        self.assertEqual(portee['titre'], 'Cumul annuel - 2026')
+
+    def test_plusieurs_annees_disponibles_affichent_toutes_periodes(self):
+        portee = _libelle_portee_livre_paie(None, None, [2026, 2025])
+
+        self.assertEqual(portee['badge'], 'Toutes périodes')
+        self.assertEqual(portee['titre'], 'Cumul toutes périodes')
 
 
 class HeuresSupplementairesBaseTests(TestCase):

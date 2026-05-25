@@ -2094,7 +2094,8 @@ def _filtres_periode_livre_paie(request):
     return annee, mois
 
 
-def _libelle_portee_livre_paie(annee, mois):
+def _libelle_portee_livre_paie(annee, mois, annees=None):
+    annees = list(annees or [])
     if annee and mois:
         return {
             'badge': 'Mensuel',
@@ -2105,6 +2106,13 @@ def _libelle_portee_livre_paie(annee, mois):
         return {
             'badge': 'Annuel',
             'titre': f'Cumul annuel - {annee}',
+            'description': 'Les totaux affichés cumulent tous les mois disponibles de l’année.',
+        }
+    if len(annees) == 1:
+        annee_unique = annees[0]
+        return {
+            'badge': 'Annuel',
+            'titre': f'Cumul annuel - {annee_unique}',
             'description': 'Les totaux affichés cumulent tous les mois disponibles de l’année.',
         }
     return {
@@ -2232,15 +2240,15 @@ def livre_paie(request):
     controles_livre = _controles_livre_paie(bulletins, totaux)
 
     # Années disponibles
-    annees = PeriodePaie.objects.filter(
+    annees = list(PeriodePaie.objects.filter(
         entreprise=request.user.entreprise
-    ).values_list('annee', flat=True).distinct().order_by('-annee')
+    ).values_list('annee', flat=True).distinct().order_by('-annee'))
     pdf_params = []
     if annee:
         pdf_params.append(f'annee={annee}')
     if mois:
         pdf_params.append(f'mois={mois}')
-    portee_livre = _libelle_portee_livre_paie(annee, mois)
+    portee_livre = _libelle_portee_livre_paie(annee, mois, annees)
 
     return render(request, 'paie/livre_paie.html', {
         'bulletins': bulletins,
@@ -2418,7 +2426,10 @@ def telecharger_livre_paie_pdf(request):
 
     story = []
 
-    portee_livre = _libelle_portee_livre_paie(annee, mois)
+    annees = PeriodePaie.objects.filter(
+        entreprise=request.user.entreprise
+    ).values_list('annee', flat=True).distinct().order_by('-annee')
+    portee_livre = _libelle_portee_livre_paie(annee, mois, annees)
     titre = f"Livre de Paie - {portee_livre['titre']}"
     story.append(Paragraph(titre, styles['LivreTitre']))
 
