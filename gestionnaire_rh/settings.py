@@ -36,7 +36,7 @@ REGISTRATION_DISABLED = config('REGISTRATION_DISABLED', default=True, cast=bool)
 # Code de vérification administrateur pour créer un compte
 ADMIN_REGISTRATION_CODE = config('ADMIN_REGISTRATION_CODE', default='625196629')
 
-ALLOWED_HOSTS = ['www.guineerh.space', 'guineerh.space', 'guineerh.pythonanywhere.com', 'localhost', '127.0.0.1', 'testserver']
+ALLOWED_HOSTS = ['www.guineerh.space', 'guineerh.space', 'guineerh.pythonanywhere.com', 'www.icguinea.com', 'icguinea.com', 'siteicguinea.pythonanywhere.com', 'localhost', '127.0.0.1', 'testserver']
 
 # Application definition
 INSTALLED_APPS = [
