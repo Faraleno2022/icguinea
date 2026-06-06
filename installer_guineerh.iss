@@ -74,7 +74,7 @@ Name: "autostart";     Description: "Lancer GestionnaireRH au démarrage de Wind
 [Files]
 ; Application compilée (tout le dossier dist\GestionnaireRH)
 ; ignoreversion + recursesubdirs : écrase les anciens fichiers lors d'une mise à jour
-Source: "dist\GestionnaireRH\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "dist\GestionnaireRH\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "license.dat"
 
 ; Script de désinstallation
 Source: "desinstaller.bat"; DestDir: "{app}"; Flags: ignoreversion
@@ -187,6 +187,12 @@ FinishedLabel=GestionnaireRH a été installé / mis à jour avec succès sur vo
 
 [Code]
 
+var
+  LicenseChoicePage: TInputOptionWizardPage;
+  LicenseFilePage: TInputFileWizardPage;
+  SelectedLicenseFile: String;
+  UseProvidedLicense: Boolean;
+
 // ── Vérifier si l'application est en cours d'exécution ────────────────────────
 function IsAppRunning(): Boolean;
 var
@@ -234,6 +240,105 @@ begin
 end;
 
 // ── Afficher l'ID machine à la fin pour l'activation ─────────────────────────
+procedure InitializeWizard();
+begin
+  LicenseChoicePage := CreateInputOptionPage(
+    wpSelectTasks,
+    'Activation de licence',
+    'Choisissez le mode d''activation de GestionnaireRH.',
+    'Si vous avez deja recu un fichier de licence, vous pouvez l''ajouter maintenant. ' +
+    'Sinon, l''application demarrera en version d''essai de 30 jours.',
+    True,
+    False
+  );
+  LicenseChoicePage.Add('J''ai un fichier de licence (.lic ou license.dat)');
+  LicenseChoicePage.Add('Continuer avec la version d''essai de 30 jours');
+  LicenseChoicePage.SelectedValueIndex := 1;
+
+  LicenseFilePage := CreateInputFilePage(
+    LicenseChoicePage.ID,
+    'Ajouter la licence',
+    'Selectionnez le fichier de licence fourni par Guinee RH.',
+    'Le fichier sera installe automatiquement sous le nom license.dat dans le dossier de l''application.'
+  );
+  LicenseFilePage.Add(
+    'Fichier de licence :',
+    'Fichiers licence (*.lic;license.dat)|*.lic;license.dat|Tous les fichiers (*.*)|*.*',
+    '.lic'
+  );
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := False;
+  if Assigned(LicenseFilePage) and (PageID = LicenseFilePage.ID) then
+    Result := LicenseChoicePage.SelectedValueIndex <> 0;
+end;
+
+function LooksLikeLicenseFile(FileName: String): Boolean;
+var
+  Content: AnsiString;
+begin
+  Result := False;
+  if not LoadStringFromFile(FileName, Content) then
+    Exit;
+
+  Result :=
+    (Pos('"license_data"', Content) > 0) and
+    (Pos('"signature"', Content) > 0) and
+    (Pos('"version"', Content) > 0);
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+var
+  LicenseFile: String;
+begin
+  Result := True;
+
+  if Assigned(LicenseChoicePage) and (CurPageID = LicenseChoicePage.ID) then
+  begin
+    UseProvidedLicense := False;
+    SelectedLicenseFile := '';
+  end;
+
+  if Assigned(LicenseFilePage) and (CurPageID = LicenseFilePage.ID) then
+  begin
+    LicenseFile := Trim(LicenseFilePage.Values[0]);
+    if LicenseFile = '' then
+    begin
+      MsgBox(
+        'Veuillez selectionner votre fichier de licence, ou revenez a l''etape precedente pour choisir la version d''essai.',
+        mbError,
+        MB_OK
+      );
+      Result := False;
+      Exit;
+    end;
+
+    if not FileExists(LicenseFile) then
+    begin
+      MsgBox('Le fichier de licence selectionne est introuvable.', mbError, MB_OK);
+      Result := False;
+      Exit;
+    end;
+
+    if not LooksLikeLicenseFile(LicenseFile) then
+    begin
+      MsgBox(
+        'Ce fichier ne ressemble pas a une licence GestionnaireRH valide.' + #13#10 +
+        'Selectionnez un fichier .lic ou license.dat fourni par Guinee RH.',
+        mbError,
+        MB_OK
+      );
+      Result := False;
+      Exit;
+    end;
+
+    SelectedLicenseFile := LicenseFile;
+    UseProvidedLicense := True;
+  end;
+end;
+
 function GetMachineId(): String;
 var
   MachineGuid: String;
@@ -323,9 +428,23 @@ begin
     ForceDirectories(ExpandConstant('{app}\data'));
 
     // Restaurer la licence si elle a été écrasée
+    if UseProvidedLicense and FileExists(SelectedLicenseFile) then
+    begin
+      LicensePath := ExpandConstant('{app}\license.dat');
+      if CopyFile(SelectedLicenseFile, LicensePath, False) then
+        Log('Licence installee depuis : ' + SelectedLicenseFile)
+      else
+        MsgBox(
+          'La licence n''a pas pu etre copiee dans le dossier d''installation.' + #13#10 +
+          'Vous pourrez toujours l''activer plus tard depuis l''application.',
+          mbError,
+          MB_OK
+        );
+    end;
+
     LicensePath := ExpandConstant('{app}\license.dat');
     LicenseBackup := ExpandConstant('{app}\backups\license_backup.dat');
-    if (not FileExists(LicensePath)) and FileExists(LicenseBackup) then
+    if (not UseProvidedLicense) and (not FileExists(LicensePath)) and FileExists(LicenseBackup) then
     begin
       CopyFile(LicenseBackup, LicensePath, False);
       Log('Licence restaurée depuis la sauvegarde');
